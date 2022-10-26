@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Searchbar } from './Searchbar/Searchbar';
 import { ImageGallery } from './ImageGallery/ImageGallery';
 import { AppStyled } from './APP.styled';
@@ -8,80 +8,69 @@ import { Loader } from './Loader/Loader';
 import { Button } from './Button/Button';
 import * as API from './API';
 
-export class App extends Component {
-  state = {
-    images: [],
-    searchImg: '',
-    page: 1,
-    hitsPerPage: 12,
-    isLoading: false,
-    totalHits: null,
+export function App() {
+  const [images, setImages] = useState([]);
+  const [searchImg, setSearchImg] = useState('');
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [totalHits, setTotalHits] = useState(null);
+
+  const hendleFormSubmit = searchQvery => {
+    if (searchImg !== searchQvery) {
+      setSearchImg(searchQvery);
+      setImages([]);
+      setPage(1);
+    }
   };
 
-  componentDidUpdate(prevProps, prevState) {
-    const { page, searchImg } = this.state;
-
-    const prevImg = prevState.searchImg;
-    const prevPage = prevState.page;
-
-    if (prevPage !== page || prevImg !== searchImg) {
-      this.getImage(searchImg, page);
+  useEffect(() => {
+    if (searchImg === '') {
+      return;
     }
-  }
 
-  getImage = async (searchImg, pageAPI) => {
-    const { hitsPerPage } = this.state;
-    this.setState({ isLoading: true });
+    async function getImage() {
+      setIsLoading(true);
 
-    try {
-      const images = await API.addImages(searchImg, pageAPI, hitsPerPage);
+      try {
+        const fetchImages = await API.addImages(searchImg, page);
 
-      if (images.hits.length === 0) {
-        toast.error(
-          `Sorry, there are no images matching your search: ${searchImg}. Please try again.`
-        );
-        return;
+        if (fetchImages.hits.length === 0) {
+          toast.error(
+            `Sorry, there are no images matching your search: ${searchImg}. Please try again.`
+          );
+          return;
+        }
+        setImages(prevState => [...prevState, ...fetchImages.hits]);
+        setTotalHits(fetchImages.totalHits);
+        toast.info(`Hooray! We found ${fetchImages.totalHits} images.`);
+      } catch (error) {
+        toast.error(`Sorry, something went wrong. Please try again.`);
+      } finally {
+        setIsLoading(false);
       }
-      this.setState(state => ({
-        images: [...state.images, ...images.hits],
-        totalHits: images.totalHits,
-      }));
-      toast.info(`Hooray! We found ${images.totalHits} images.`);
-      //console.log(images);
-    } catch (error) {
-      toast.error(`Sorry, something went wrong. Please try again.`);
-    } finally {
-      this.setState({ isLoading: false });
     }
+    getImage();
+  }, [searchImg, page]);
+
+  const handleLoadMoreBtn = () => {
+    setPage(page + 1);
   };
 
-  hendleFormSubmit = searchImg => {
-    if (this.state.searchImg !== searchImg) {
-      this.setState({ searchImg, images: [], page: 1 });
-    }
-  };
-  handleLoadMoreBtn = () => {
-    this.setState(state => ({ page: state.page + 1 }));
-  };
+  return (
+    <AppStyled>
+      <Searchbar
+        onSubmit={hendleFormSubmit}
+        isSubmitting={isLoading}
+      ></Searchbar>
 
-  render() {
-    const { images, isLoading, totalHits } = this.state;
-    return (
-      <AppStyled>
-        <Searchbar
-          onSubmit={this.hendleFormSubmit}
-          isSubmitting={isLoading}
-        ></Searchbar>
+      {<ToastContainer autoClose={2000} />}
 
-        {<ToastContainer autoClose={2000} />}
+      {isLoading && <Loader />}
+      {images.length > 0 && <ImageGallery images={images} />}
 
-        {isLoading && <Loader />}
-        {images.length > 0 && <ImageGallery images={images} />}
-
-        {!isLoading && images.length > 0 && images.length < totalHits && (
-          <Button onClick={this.handleLoadMoreBtn} />
-        )}
-      </AppStyled>
-    );
-  }
+      {!isLoading && images.length > 0 && images.length < totalHits && (
+        <Button onClick={handleLoadMoreBtn} />
+      )}
+    </AppStyled>
+  );
 }
